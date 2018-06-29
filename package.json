@@ -1,0 +1,16 @@
+{
+  "name": "factorio-hdl",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "./node_modules/.bin/tsc",
+    "watch": "./node_modules/.bin/tsc -w"
+  },
+  "author": "mcmacker4",
+  "license": "GPL-3.0",
+  "devDependencies": {
+    "@types/node": "^10.5.1",
+    "typescript": "^2.9.2"
+  }
+}

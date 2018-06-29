@@ -1,0 +1,30 @@
+
+component AssemblingMachine1
+    in raw
+    out assembled
+
+    connections
+        from raw to assembled
+    end
+end
+
+component CircuitFactory
+    # inputs
+    in copper
+    in iron
+
+    # outputs
+    out circuits
+
+    # dependencies
+    dependencies
+        AssemblingMachine1 assembly
+    end
+
+    # connections
+    connections
+        from copper to assembly
+        from iron to assembly
+        from assembly to circuits
+    end
+end
