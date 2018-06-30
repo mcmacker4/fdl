@@ -11,26 +11,30 @@ export class Parser {
         this.tokens = tokens
     }
 
-    parsePort() : Port {
-        // First token is either "in" or "out"
-        const type = this.tokens.shift().value;
-        ok(["in", "out"].indexOf(type) >= 0)
-        //TODO: some kind of checking for valid types
-        let name = this.tokens.shift().value
-        return new Port(type, name)
+    private next() : Token {
+        return this.tokens.shift()
     }
 
-    parseDependency() : Dependency {
-        const compName = this.tokens.shift().value
-        const component = this.components.find(comp => comp.name === compName)
+    private parsePort(component: Component) : Port {
+        // First token is either "in" or "out"
+        const type = this.next().value;
+        ok(["in", "out"].indexOf(type) >= 0)
+        //TODO: some kind of checking for valid types
+        let name = this.next().value
+        return new Port(type, name, component)
+    }
+
+    private parseDependency() : Dependency {
+        const compName = this.next()
+        const component = this.components.find(comp => comp.name === compName.value)
         if(!component)
-            throw new Error(`Unknown Component: ${compName}`)
-        const name = this.tokens.shift().value
+            throw new Error(`[Line ${compName.line}] Unknown Component: ${compName.value}`)
+        const name = this.next().value
         return new Dependency(component, name)
     }
 
-    parseDependencies() : Dependency[] {
-        equal(this.tokens.shift().value, "dependencies")
+    private parseDependencies() : Dependency[] {
+        equal(this.next().value, "dependencies")
 
         const dependencies: Dependency[] = []
         while(this.tokens[0].value !== "end") {
@@ -39,62 +43,94 @@ export class Parser {
         }
 
         //Consume "end" token
-        equal(this.tokens.shift().value, "end")
+        equal(this.next().value, "end")
 
         return dependencies
     }
 
-    parseConnection(ports: Port[]) : Connection {
-        equal(this.tokens.shift().value, "from")
+    private findPort(name: string, component: Component, lineNum: number) : Port {
 
-        //Find output port
-        const fromName = this.tokens.shift().value
-        const from = ports.find(p => p.name === fromName)
-        if(!from)
-            throw new Error(`Unknown port: ${fromName}`)
-        if(from.type !== "out")
-            throw new Error(`Port ${fromName} is Not an output.`)
+        if(name.indexOf('.') >= 0) {
+            //Name references a dependency
+            const parts = name.split('.')
+            if(parts.length > 2)
+                throw new Error(`[Line ${lineNum}] Invalid port name: ${name}`)
+            
+            //Find dependency by name
+            const dep = component.dependencies.find(d => d.name === parts[0])
+            if(!dep)
+                throw new Error(`[Line ${lineNum}] Unknown component name: ${parts[0]}`)
+            
+            const port = dep.component.ports.find(p => p.name === parts[1])
+            if(!port)
+                throw new Error(`[Line ${lineNum}] Component ${parts[0]} has no port named ${parts[1]}`)
+            
+            return port
+
+        } else {
+            const port = component.ports.find(p => p.name === name)
+            if(!port)
+                throw new Error(`[Line ${lineNum}] Unknown port ${name}`)
+            return port
+        }
+
+    }
+
+    private parseConnection(component: Component) : Connection {
+        equal(this.next().value, "from")
+
+        //Find start port
+        let name = this.next()
+        const from = this.findPort(name.value, component, name.line)
         
-        //Assert
-        equal(this.tokens.shift().value, "to")
+        if((from.component == component) ? from.type !== "in" : from.type !== "out") {
+            //Incorrect flow direction
+            console.log("FROM: to.comp === comp: " + (from.component === component))
+            throw new Error(`[Line ${name.line}] Port configuration mismatch: ${name.value}`)
+        }
 
-        //Find input port
-        const toName = this.tokens.shift().value
-        const to = ports.find(p => p.name === toName)
-        if(!to)
-            throw new Error(`Unknown port: ${toName}`)
-        if(to.type !== "in")
-            throw new Error(`Port ${toName} is Not an input.`)
+        //Assert
+        equal(this.next().value, "to")
+
+        //Find end port
+        name = this.next()
+        const to = this.findPort(name.value, component, name.line)
+
+        if((to.component == component) ? to.type !== "out" : to.type !== "in") {
+            //Incorrect flow direction
+            console.log("TO: to.comp === comp: " + (to.component === component))
+            throw new Error(`[Line ${name.line}] Port configuration mismatch: ${name.value}`)
+        }
 
         return new Connection(from, to)
     }
 
-    parseConnections(ports: Port[]) : Connection[] {
-        equal(this.tokens.shift().value, "connections")
+    private parseConnections(component: Component) : Connection[] {
+        equal(this.next().value, "connections")
         
         const connections: Connection[] = []
         while(this.tokens[0].value !== "end") {
-            const connection = this.parseConnection(ports)
+            const connection = this.parseConnection(component)
             connections.push(connection)
         }
 
         //Consume "end" token
-        equal(this.tokens.shift().value, "end")
+        equal(this.next().value, "end")
         
         return connections
     }
 
-    parseComponent() : Component {
-        equal(this.tokens.shift().value, "component")
+    private parseComponent() : Component {
+        equal(this.next().value, "component")
 
-        let name = this.tokens.shift().value
+        let name = this.next().value
         let component = new Component(name)
 
         while(this.tokens[0].value !== "end") {
 
             switch(this.tokens[0].value) {
                 case "in": case "out": {
-                    let port = this.parsePort()
+                    let port = this.parsePort(component)
                     component.ports.push(port)
                     break;
                 }
@@ -104,17 +140,17 @@ export class Parser {
                     break;
                 }
                 case "connections": {
-                    let connections = this.parseConnections(component.ports)
+                    let connections = this.parseConnections(component)
                     component.connections.push(...connections)
                     break;
                 }
                 default:
-                    throw new Error(`Unexpected token: "${this.tokens[0].value}"`)
+                    throw new Error(`[Line ${this.tokens[0].line}] Unexpected token: "${this.tokens[0].value}"`)
             }
 
         }
 
-        this.tokens.shift()
+        this.next()
 
         return component
 
@@ -122,18 +158,16 @@ export class Parser {
 
     parse() : Component[] {
 
-        const components: Component[] = []
-
         while(this.tokens.length > 0) {
             if(this.tokens[0].value === "component") {
                 const component = this.parseComponent()
-                components.push(component)
+                this.components.push(component)
             } else {
-                console.log(`Lonely token: ${this.tokens.shift().value}`)
+                console.log(`[Line ${this.tokens[0].line}] Lonely token: ${this.next().value}`)
             }
         }
 
-        return components
+        return this.components
 
     }
 

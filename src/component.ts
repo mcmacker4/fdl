@@ -1,22 +1,17 @@
 
 
 export class Port {
-    
-    type: string
-    name: string
-    component: Component = null
-
-    constructor(type: string, name: string) {
-        this.type = type
-        this.name = name
-    }
-
+    constructor(
+        public type: string,
+        public name: string,
+        public component: Component
+    ) {}
 }
 
 export class Connection {
     constructor(
-        public start: Port,
-        public end: Port
+        public from: Port,
+        public to: Port
     ) {}
 }
 

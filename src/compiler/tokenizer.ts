@@ -9,6 +9,7 @@ export enum TokenType {
 export interface Token {
     type: TokenType
     value: string
+    line: number
 }
 
 export const KEYWORDS = [
@@ -25,7 +26,7 @@ function isKeyword(word: string) {
 
 export class Tokenizer {
 
-    private tokenizeLine(line: string, tokens: Token[]) : Token[] {
+    private tokenizeLine(line: string, lineNum: number, tokens: Token[]) : Token[] {
         let trimmed = line.trim()
         if(trimmed.length === 0 || trimmed.startsWith('#'))
             return []
@@ -33,7 +34,8 @@ export class Tokenizer {
         let words = trimmed.split(/\s+/)
         words.map(word => ({
             type: isKeyword(word) ? TokenType.KEYWORD : TokenType.IDENTIFIER,
-            value: word
+            value: word,
+            line: lineNum
         })).forEach(token => tokens.push(token))
     }
 
@@ -44,8 +46,10 @@ export class Tokenizer {
 
             let tokens: Token[] = []
 
+            let lineNum = 1;
+
             readline.on('line', (line) => {
-                this.tokenizeLine(line, tokens)
+                this.tokenizeLine(line, lineNum++, tokens)
             })
 
             readline.on('close', () => {

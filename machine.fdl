@@ -11,7 +11,6 @@ end
 component CircuitFactory
     # inputs
     in copper
-    in iron
 
     # outputs
     out circuits
@@ -23,8 +22,7 @@ component CircuitFactory
 
     # connections
     connections
-        from copper to assembly
-        from iron to assembly
-        from assembly to circuits
+        from copper to assembly.raw
+        from assembly.assembled to circuits
     end
 end
